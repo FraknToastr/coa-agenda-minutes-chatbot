@@ -1,46 +1,51 @@
 """
-Conversational Retrieval-Augmented Chatbot (local version)
 City of Adelaide Agenda & Minutes Chatbot
+(Local version – updated for LangChain 1.0 modular packages)
 
-This version:
-- Uses Ollama to run a local LLM (e.g. llama3, mistral, phi3)
-- Retrieves relevant document chunks from Chroma
-- Keeps short-term chat memory for context
+This script:
+- Uses Ollama for a local LLM (llama3, mistral, phi3, etc.)
+- Loads documents from a local Chroma vector store
+- Embeds text via HuggingFace (runs offline)
+- Supports conversational memory
 """
 
+from pathlib import Path
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
-from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
+from langchain_chroma import Chroma
 from langchain_ollama import OllamaLLM
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from pathlib import Path
 
 
 # === CONFIGURATION ============================================================
-VECTOR_DIR = Path("../vectorstore")  # where Chroma is stored
-MODEL_NAME = "gpt-oss:20b"                # or "mistral", "phi3", etc.
+VECTOR_DIR = Path("../vectorstore")               # Where Chroma DB is stored
+MODEL_NAME = "llama3"                             # Any local Ollama model (e.g. llama3, mistral, phi3, gpt-oss:20b)
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+CHUNK_K = 5                                       # Number of retrieved chunks per query
 # ==============================================================================
 
 
 def create_chatbot():
+    """Create a conversational RAG chatbot using local models only."""
     print(f"🤖 Starting local chatbot using model: {MODEL_NAME}")
     print("📚 Loading local vectorstore...")
 
-    # Load embeddings and Chroma store
+    # Local embeddings
     embedding_fn = HuggingFaceEmbeddings(model_name=EMBEDDING_MODEL)
+
+    # Load persisted Chroma vectorstore
     db = Chroma(persist_directory=str(VECTOR_DIR), embedding_function=embedding_fn)
 
-    # Create local language model
+    # Local LLM through Ollama
     llm = OllamaLLM(model=MODEL_NAME, temperature=0)
 
-    # Add conversation memory for continuity
+    # Short-term memory for the chat session
     memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
 
-    # Build the retrieval-based conversation chain
+    # Build the conversational RAG chain
     chain = ConversationalRetrievalChain.from_llm(
         llm=llm,
-        retriever=db.as_retriever(search_kwargs={"k": 5}),
+        retriever=db.as_retriever(search_kwargs={"k": CHUNK_K}),
         memory=memory
     )
 
@@ -48,6 +53,7 @@ def create_chatbot():
     return chain
 
 
+# === INTERACTIVE CLI LOOP =====================================================
 if __name__ == "__main__":
     chatbot = create_chatbot()
     print("\n🏛️ City of Adelaide Agenda & Minutes Chatbot\n")
@@ -58,5 +64,9 @@ if __name__ == "__main__":
         if query.lower() in ["exit", "quit"]:
             print("👋 Goodbye!")
             break
-        response = chatbot.invoke({"question": query})
-        print("Bot:", response["answer"], "\n")
+
+        try:
+            response = chatbot.invoke({"question": query})
+            print("Bot:", response["answer"], "\n")
+        except Exception as e:
+            print("⚠️  Error during response:", e, "\n")
