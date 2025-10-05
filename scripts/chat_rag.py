@@ -18,7 +18,7 @@ from pathlib import Path
 
 # === CONFIGURATION ============================================================
 VECTOR_DIR = Path("../vectorstore")  # where Chroma is stored
-MODEL_NAME = "llama3"                # or "mistral", "phi3", etc.
+MODEL_NAME = "gpt-oss:20b"                # or "mistral", "phi3", etc.
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 # ==============================================================================
 
